@@ -215,13 +215,32 @@ static void *rateContext = &rateContext;
 // Khi quay lại app, khôi phục phát video và khôi phục trạng thái AVAudioSession
 - (void)appWillEnterForeground {
 
-//    _playerLayer.player = _player;
+////    _playerLayer.player = _player;
+//
+//    // Nếu video đang phát trước khi vào nền, tiếp tục phát
+//    if (self.isPlaying) {
+//        [_player play];
+//    }
+//    [self restorePreviousAudioSession]; // Khôi phục AVAudioSession ban đầu
 
-    // Nếu video đang phát trước khi vào nền, tiếp tục phát
-    if (self.isPlaying) {
-        [_player play];
+    // Kiểm tra _player trước khi khôi phục
+    if (_player != nil) {
+        _playerLayer.player = _player;
+
+        // Nếu video đang phát trước khi vào nền, tiếp tục phát khi quay lại foreground
+        if (self.isPlaying) {
+            // Kiểm tra trạng thái player trước khi phát
+            if (_player.status == AVPlayerStatusReadyToPlay) {
+                [_player play];  // Tiếp tục phát âm thanh
+            } else {
+                NSLog(@"Player không sẵn sàng phát lại.");
+            }
+        }
+    } else {
+        NSLog(@"Player không tồn tại.");
     }
-    [self restorePreviousAudioSession]; // Khôi phục AVAudioSession ban đầu
+
+    [self restorePreviousAudioSession];  // Khôi phục lại AVAudioSession ban đầu nếu cần
 }
 
 - (void)restorePreviousAudioSession {
