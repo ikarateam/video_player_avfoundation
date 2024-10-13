@@ -81,6 +81,10 @@
 @property(nonatomic) FVPDisplayLink *displayLink;
 @property(nonatomic, assign) BOOL waitingForFrame;
 
+// Lưu trạng thái AVAudioSession trước khi thay đổi
+@property(nonatomic) NSString *previousCategory;
+@property(nonatomic) AVAudioSessionCategoryOptions previousOptions;
+
 - (instancetype)initWithURL:(NSURL *)url
                frameUpdater:(FVPFrameUpdater *)frameUpdater
                 displayLink:(FVPDisplayLink *)displayLink
@@ -91,6 +95,7 @@
 - (void)expectFrame;
 - (void)appDidEnterBackground;
 - (void)appWillEnterForeground;
+- (void)restorePreviousAudioSession; // Khôi phục lại trạng thái AVAudioSession
 
 @end
 
@@ -130,6 +135,16 @@ static void *rateContext = &rateContext;
         registrar:(NSObject<FlutterPluginRegistrar> *)registrar {
     self = [super init];
     if (self) {
+
+        // Lưu trạng thái AVAudioSession ban đầu
+        AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+        self.previousCategory = audioSession.category;
+        self.previousOptions = audioSession.categoryOptions;
+
+        // Thiết lập AVAudioSession cho phát nhạc nền
+        [audioSession setCategory:AVAudioSessionCategoryPlayback error:nil];
+        [audioSession setActive:YES error:nil];
+
         NSDictionary<NSString *, id> *options = nil;
         if ([headers count] != 0) {
             options = @{@"AVURLAssetHTTPHeaderFieldsKey" : headers};
@@ -185,12 +200,32 @@ static void *rateContext = &rateContext;
     return self;
 }
 
+// Khi vào nền, dừng phát video
 - (void)appDidEnterBackground {
+    // Lưu trạng thái hiện tại của player
+    if (self.isPlaying) {
+        [_player pause];
+    }
+    // Nếu cần thiết, bạn có thể tắt playerLayer
     _playerLayer.player = nil;
+//    _playerLayer.player = nil;
 }
 
+// Khi quay lại app, khôi phục phát video và khôi phục trạng thái AVAudioSession
 - (void)appWillEnterForeground {
     _playerLayer.player = _player;
+
+    // Nếu video đang phát trước khi vào nền, tiếp tục phát
+    if (self.isPlaying) {
+        [_player play];
+    }
+    [self restorePreviousAudioSession]; // Khôi phục AVAudioSession ban đầu
+}
+
+- (void)restorePreviousAudioSession {
+    AVAudioSession *audioSession = [AVAudioSession sharedInstance];
+    [audioSession setCategory:self.previousCategory withOptions:self.previousOptions error:nil];
+    [audioSession setActive:YES error:nil];
 }
 
 - (void)dealloc {
