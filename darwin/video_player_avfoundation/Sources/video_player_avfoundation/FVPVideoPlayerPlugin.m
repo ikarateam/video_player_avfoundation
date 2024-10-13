@@ -202,18 +202,20 @@ static void *rateContext = &rateContext;
 
 // Khi vào nền, dừng phát video
 - (void)appDidEnterBackground {
+
     // Lưu trạng thái hiện tại của player
     if (self.isPlaying) {
         [_player pause];
     }
-    // Nếu cần thiết, bạn có thể tắt playerLayer
-    _playerLayer.player = nil;
+//    // Nếu cần thiết, bạn có thể tắt playerLayer
 //    _playerLayer.player = nil;
+
 }
 
 // Khi quay lại app, khôi phục phát video và khôi phục trạng thái AVAudioSession
 - (void)appWillEnterForeground {
-    _playerLayer.player = _player;
+
+//    _playerLayer.player = _player;
 
     // Nếu video đang phát trước khi vào nền, tiếp tục phát
     if (self.isPlaying) {
@@ -224,7 +226,9 @@ static void *rateContext = &rateContext;
 
 - (void)restorePreviousAudioSession {
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
-    [audioSession setCategory:self.previousCategory withOptions:self.previousOptions error:nil];
+    if (![audioSession.category isEqualToString:self.previousCategory]) {
+        [audioSession setCategory:self.previousCategory withOptions:self.previousOptions error:nil];
+    }
     [audioSession setActive:YES error:nil];
 }
 
@@ -272,11 +276,20 @@ static void *rateContext = &rateContext;
     if (_isLooping) {
         AVPlayerItem *p = [notification object];
         [p seekToTime:kCMTimeZero completionHandler:nil];
+        [_player play];  // Tiếp tục phát ngay khi video hết mà không cần dừng
     } else {
         if (_eventSink) {
             _eventSink(@{@"event" : @"completed"});
         }
     }
+//    if (_isLooping) {
+//        AVPlayerItem *p = [notification object];
+//        [p seekToTime:kCMTimeZero completionHandler:nil];
+//    } else {
+//        if (_eventSink) {
+//            _eventSink(@{@"event" : @"completed"});
+//        }
+//    }
 }
 
 const int64_t TIME_UNSET = -9223372036854775807;
