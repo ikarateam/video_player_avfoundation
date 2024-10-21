@@ -141,10 +141,6 @@ static void *rateContext = &rateContext;
         self.previousCategory = audioSession.category;
         self.previousOptions = audioSession.categoryOptions;
 
-        // Thiết lập AVAudioSession cho phát nhạc nền
-        [audioSession setCategory:AVAudioSessionCategoryPlayback error:nil];
-        [audioSession setActive:YES error:nil];
-
         NSDictionary<NSString *, id> *options = nil;
         if ([headers count] != 0) {
             options = @{@"AVURLAssetHTTPHeaderFieldsKey" : headers};
@@ -202,6 +198,7 @@ static void *rateContext = &rateContext;
 
 // Khi vào nền, dừng phát video
 - (void)appDidEnterBackground {
+    
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     // Kiểm tra nếu hiện tại không phải là Playback thì set lại Playback
     if (![audioSession.category isEqualToString:AVAudioSessionCategoryPlayback]) {
@@ -210,35 +207,25 @@ static void *rateContext = &rateContext;
         [audioSession setCategory:AVAudioSessionCategoryPlayback error:nil];
     }
     _playerLayer.player = nil;
-    // Lưu trạng thái hiện tại của player
-//    if (self.isPlaying) {
-//        [_player pause];
-//    }
-////    // Nếu cần thiết, bạn có thể tắt playerLayer
-////    _playerLayer.player = nil;
 
 }
 
 // Khi quay lại app, khôi phục phát video và khôi phục trạng thái AVAudioSession
 - (void)appWillEnterForeground {
-    
-    // Kiểm tra _player trước khi khôi phục
-    if (_player != nil) {
-        _playerLayer.player = _player;
+    _playerLayer.player = _player;
+    f (_player.status == AVPlayerStatusReadyToPlay && _player.currentItem.status == AVPlayerItemStatusReadyToPlay) {
+        CMTime currentTime = _player.currentTime;
 
-        // Nếu video đang phát trước khi vào nền, tiếp tục phát khi quay lại foreground
-        if (self.isPlaying) {
-            // Kiểm tra trạng thái player trước khi phát
-            if (_player.status == AVPlayerStatusReadyToPlay) {
-                [_player play];  // Tiếp tục phát âm thanh
-            } else {
-                NSLog(@"Player không sẵn sàng phát lại.");
+        // Seek đến thời gian hiện tại với độ chính xác cao để đảm bảo phát lại mượt mà
+        [_player seekToTime:currentTime toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
+            if (finished) {
+                // Chỉ bắt đầu phát lại nếu thao tác seek hoàn tất
+                [_player play];
             }
-        }
+        }];
     } else {
-        NSLog(@"Player không tồn tại.");
+        NSLog(@"Player chưa sẵn sàng phát lại.");
     }
-
     [self restorePreviousAudioSession];  // Khôi phục lại AVAudioSession ban đầu nếu cần
 }
 
