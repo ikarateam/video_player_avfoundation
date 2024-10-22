@@ -213,7 +213,7 @@ static void *rateContext = &rateContext;
 // Khi quay lại app, khôi phục phát video và khôi phục trạng thái AVAudioSession
 - (void)appWillEnterForeground {
     _playerLayer.player = _player;
-    f (_player.status == AVPlayerStatusReadyToPlay && _player.currentItem.status == AVPlayerItemStatusReadyToPlay) {
+    if (_player.status == AVPlayerStatusReadyToPlay && _player.currentItem.status == AVPlayerItemStatusReadyToPlay) {
         CMTime currentTime = _player.currentTime;
 
         // Seek đến thời gian hiện tại với độ chính xác cao để đảm bảo phát lại mượt mà
@@ -228,7 +228,6 @@ static void *rateContext = &rateContext;
     }
     [self restorePreviousAudioSession];  // Khôi phục lại AVAudioSession ban đầu nếu cần
 }
-
 - (void)restorePreviousAudioSession {
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     if (![audioSession.category isEqualToString:self.previousCategory]) {
