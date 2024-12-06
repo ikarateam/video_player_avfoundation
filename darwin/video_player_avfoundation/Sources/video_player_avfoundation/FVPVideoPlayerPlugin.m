@@ -11,6 +11,7 @@
 #endif
 
 @interface FVPFrameUpdater : NSObject
+
 @property(nonatomic) int64_t textureId;
 @property(nonatomic, weak, readonly) NSObject<FlutterTextureRegistry> *registry;
 @property(nonatomic, weak) AVPlayerItemVideoOutput *videoOutput;
@@ -67,6 +68,7 @@
 #pragma mark -
 
 @interface FVPVideoPlayer ()
+@property (nonatomic, assign) BOOL wasPlayingBeforeBackground;
 @property(readonly, nonatomic) AVPlayerItemVideoOutput *videoOutput;
 @property(nonatomic, weak) NSObject<FlutterPluginRegistrar> *registrar;
 @property(nonatomic, readonly) CALayer *flutterViewLayer;
@@ -198,7 +200,8 @@ static void *rateContext = &rateContext;
 
 // Khi vào nền, dừng phát video
 - (void)appDidEnterBackground {
-    
+    self.wasPlayingBeforeBackground = (_player.rate != 0);
+
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     // Kiểm tra nếu hiện tại không phải là Playback thì set lại Playback
     if (![audioSession.category isEqualToString:AVAudioSessionCategoryPlayback]) {
@@ -219,8 +222,13 @@ static void *rateContext = &rateContext;
         // Seek đến thời gian hiện tại với độ chính xác cao để đảm bảo phát lại mượt mà
         [_player seekToTime:currentTime toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
             if (finished) {
-                // Chỉ bắt đầu phát lại nếu thao tác seek hoàn tất
-                [_player play];
+                NSLog(@"Player sẵn sàng phát lại.");
+                // Chỉ phát lại nếu trước đó player đang phát
+                if (self.wasPlayingBeforeBackground) {
+                    [_player play];
+                } else {
+                    NSLog(@"Player trước đó paused, không tự động play.");
+                }
             }
         }];
     } else {
@@ -228,6 +236,7 @@ static void *rateContext = &rateContext;
     }
     [self restorePreviousAudioSession];  // Khôi phục lại AVAudioSession ban đầu nếu cần
 }
+
 - (void)restorePreviousAudioSession {
     AVAudioSession *audioSession = [AVAudioSession sharedInstance];
     if (![audioSession.category isEqualToString:self.previousCategory]) {
