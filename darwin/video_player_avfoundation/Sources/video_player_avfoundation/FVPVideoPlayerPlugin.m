@@ -137,21 +137,60 @@ static void *rateContext = &rateContext;
         registrar:(NSObject<FlutterPluginRegistrar> *)registrar {
     self = [super init];
     if (self) {
-
         // Lưu trạng thái AVAudioSession ban đầu
         AVAudioSession *audioSession = [AVAudioSession sharedInstance];
         self.previousCategory = audioSession.category;
         self.previousOptions = audioSession.categoryOptions;
 
+        // Xử lý headers và kiểm tra isRemoveAudioTrack
+        NSMutableDictionary<NSString *, NSString *> *modifiedHeaders = [headers mutableCopy];
+        NSString *isRemoveAudioTrack = headers[@"isRemoveAudioTrack"] ?: @"false";
+        [modifiedHeaders removeObjectForKey:@"isRemoveAudioTrack"];
+        NSLog(@"isRemoveAudioTrack: %@", isRemoveAudioTrack);
         NSDictionary<NSString *, id> *options = nil;
-        if ([headers count] != 0) {
-            options = @{@"AVURLAssetHTTPHeaderFieldsKey" : headers};
+        if ([modifiedHeaders count] != 0) {
+            options = @{@"AVURLAssetHTTPHeaderFieldsKey" : modifiedHeaders};
         }
+
         AVURLAsset *urlAsset = [AVURLAsset URLAssetWithURL:url options:options];
-        AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:urlAsset];
+        AVPlayerItem *item;
+        AVMutableComposition *composition;
+
+        if ([isRemoveAudioTrack isEqualToString:@"true"]) {
+            // Tạo composition để loại bỏ audio track
+            composition = [AVMutableComposition composition];
+
+            // Lấy video track từ asset
+            AVAssetTrack *videoTrack = [[urlAsset tracksWithMediaType:AVMediaTypeVideo] firstObject];
+            if (videoTrack) {
+                // Tạo mutable track trong composition
+                AVMutableCompositionTrack *compVideoTrack = [composition addMutableTrackWithMediaType:AVMediaTypeVideo
+                                                                                     preferredTrackID:kCMPersistentTrackID_Invalid];
+
+                // Thêm video track vào composition
+                NSError *error = nil;
+                [compVideoTrack insertTimeRange:CMTimeRangeMake(kCMTimeZero, urlAsset.duration)
+                                        ofTrack:videoTrack
+                                         atTime:kCMTimeZero
+                                          error:&error];
+
+                if (error) {
+                    NSLog(@"Không thể thêm video track: %@", error.localizedDescription);
+                }
+            }
+
+            // Tạo player item từ composition
+            item = [AVPlayerItem playerItemWithAsset:composition];
+        } else {
+            // Sử dụng asset gốc nếu không cần remove audio
+            item = [AVPlayerItem playerItemWithAsset:urlAsset];
+        }
 
         _player = [avFactory playerWithPlayerItem:item];
         _player.actionAtItemEnd = AVPlayerActionAtItemEndNone;
+        if ([isRemoveAudioTrack isEqualToString:@"true"]) {
+            _player.muted = YES; // Tắt âm thanh nếu remove audio track
+        }
 
         _playerLayer = [AVPlayerLayer playerLayerWithPlayer:_player];
         [self.flutterViewLayer addSublayer:_playerLayer];
@@ -168,9 +207,12 @@ static void *rateContext = &rateContext;
         frameUpdater.videoOutput = _videoOutput;
 
         [self addObserversForItem:item player:_player];
-        [urlAsset loadValuesAsynchronouslyForKeys:@[ @"tracks" ] completionHandler:^{
-            if ([urlAsset statusOfValueForKey:@"tracks" error:nil] == AVKeyValueStatusLoaded) {
-                NSArray *tracks = [urlAsset tracksWithMediaType:AVMediaTypeVideo];
+
+        // Load tracks từ asset tương ứng
+        AVAsset *assetToLoad = [isRemoveAudioTrack isEqualToString:@"true"] ? composition : urlAsset;
+        [assetToLoad loadValuesAsynchronouslyForKeys:@[ @"tracks" ] completionHandler:^{
+            if ([assetToLoad statusOfValueForKey:@"tracks" error:nil] == AVKeyValueStatusLoaded) {
+                NSArray *tracks = [assetToLoad tracksWithMediaType:AVMediaTypeVideo];
                 if ([tracks count] > 0) {
                     AVAssetTrack *videoTrack = tracks[0];
                     [videoTrack loadValuesAsynchronouslyForKeys:@[ @"preferredTransform" ]
@@ -178,7 +220,9 @@ static void *rateContext = &rateContext;
                                                   if (self->_disposed) return;
                                                   if ([videoTrack statusOfValueForKey:@"preferredTransform" error:nil] == AVKeyValueStatusLoaded) {
                                                       self->_preferredTransform = FVPGetStandardizedTransformForTrack(videoTrack);
-                                                      AVMutableVideoComposition *videoComposition = [self getVideoCompositionWithTransform:self->_preferredTransform withAsset:urlAsset withVideoTrack:videoTrack];
+                                                      AVMutableVideoComposition *videoComposition = [self getVideoCompositionWithTransform:self->_preferredTransform
+                                                                                                                                 withAsset:assetToLoad
+                                                                                                                            withVideoTrack:videoTrack];
                                                       item.videoComposition = videoComposition;
                                                   }
                                               }];
